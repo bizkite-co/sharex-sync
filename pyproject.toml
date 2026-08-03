@@ -1,0 +1,16 @@
+[project]
+name = "sharex-sync"
+version = "0.1.0"
+description = "Sync ShareX recording settings, hotkeys, and microphone selection across machines"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+sharex-sync = "sharex_sync.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sharex_sync"]
