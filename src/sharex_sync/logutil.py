@@ -20,6 +20,28 @@ ENV_LOG_RETENTION = "SHAREX_SYNC_LOG_RETENTION"
 _LOG_FILE_NAME = "sharex-sync.log"
 
 
+class _SafeTimedRotatingFileHandler(TimedRotatingFileHandler):
+    """TimedRotatingFileHandler that does not explode on Windows file locks.
+
+    Long-running commands (e.g. ``sharex-sync recctl``) keep the log open.
+    A short CLI run then tries to rotate at midnight and hits WinError 32
+    (file in use). Swallow that and keep logging to the current file.
+    """
+
+    def doRollover(self) -> None:  # noqa: N802 - stdlib name
+        try:
+            super().doRollover()
+        except PermissionError:
+            # Another process holds the log; skip rotation this pass.
+            pass
+        except OSError as exc:
+            # Windows sharing violation
+            if getattr(exc, "winerror", None) == 32:
+                pass
+            else:
+                raise
+
+
 def default_log_dir() -> Path:
     env = os.environ.get(ENV_LOG_DIR)
     if env:
@@ -66,11 +88,12 @@ def setup_logging(
     log_dir = Path(log_dir).expanduser()
     try:
         log_dir.mkdir(parents=True, exist_ok=True)
-        file_handler = TimedRotatingFileHandler(
+        file_handler = _SafeTimedRotatingFileHandler(
             log_dir / _LOG_FILE_NAME,
             when="midnight",
             backupCount=max(1, retention_days),
             encoding="utf-8",
+            delay=True,  # open on first emit; reduces lock fights a bit
         )
         file_handler.suffix = "%Y-%m-%d"
         file_handler.setFormatter(fmt)

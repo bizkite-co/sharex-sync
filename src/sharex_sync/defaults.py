@@ -61,14 +61,36 @@ PREFERRED_MIC_PATTERNS = ["pd100u"]
 FALLBACK_MIC_PATTERNS = ["microphone", "mic"]
 
 # Hotkey combos and the ShareX job they trigger.
+# Each entry: (hotkey_string, job, description, win_modifier=False)
+# ShareX stores the Windows key as HotkeyInfo.Win, not in the Hotkey string.
+# Keychron on THIS machine (Windows mode — legends ≠ Mac defaults):
+#   Left Option → Win (opens Start alone)
+#   Command     → Alt
+#   Right Option → RAlt
+#   Control     → Ctrl
+#
+# Whole recording suite uses the SAME physical modifiers: Control+Option+key
+# = Ctrl+Win+key (Hotkey string + Win:true). Not a mix of Option and Command.
 HOTKEYS = [
-    ("PrintScreen, Control", "RectangleRegion", "Capture region"),
-    ("W, Control, Alt", "ActiveWindow", "Capture active window"),
-    ("PrintScreen, Shift", "ScreenRecorder", "Start/Stop screen recording"),
-    ("PrintScreen, Shift, Control", "ScreenRecorderGIF", "Start/Stop screen recording (GIF)"),
-    ("R, Control, Alt", "ScreenRecorderActiveWindow", "Record active window"),
-    ("P, Control, Alt", "PauseScreenRecording", "Pause/Resume screen recording"),
+    ("PrintScreen, Control", "RectangleRegion", "Capture region", False),
+    ("W, Control", "ActiveWindow", "Capture active window", True),  # Control+Option+W
+    ("PrintScreen, Shift", "ScreenRecorder", "Start/Stop screen recording", False),
+    ("PrintScreen, Shift, Control", "ScreenRecorderGIF", "Start/Stop screen recording (GIF)", False),
+    ("R, Control", "ScreenRecorderActiveWindow", "Record active window", True),  # Control+Option+R
+    # Ctrl+Win+P is reserved by Windows (fails ShareX registration). Use B = break/pause.
+    ("B, Control", "PauseScreenRecording", "Pause/Resume screen recording", True),  # Control+Option+B
+    ("X, Control", "StopScreenRecording", "Stop screen recording", True),        # Control+Option+X
+    ("A, Control", "AbortScreenRecording", "Abort screen recording", True),      # Control+Option+A
 ]
+
+
+def _hotkey_parts(entry: tuple) -> tuple[str, str, str, bool]:
+    """Normalize HOTKEYS entry to (combo, job, description, win)."""
+    if len(entry) == 4:
+        combo, job, description, win = entry
+        return combo, job, description, bool(win)
+    combo, job, description = entry
+    return combo, job, description, False
 
 
 def _task_settings(job: str, description: str) -> dict:
@@ -114,13 +136,16 @@ def _task_settings(job: str, description: str) -> dict:
 
 def hotkeys_config() -> dict:
     """Build the full HotkeysConfig.json document."""
-    return {
-        "Hotkeys": [
+    entries = []
+    for entry in HOTKEYS:
+        combo, job, description, win = _hotkey_parts(entry)
+        entries.append(
             {
-                "HotkeyInfo": {"Hotkey": combo, "Win": False},
+                "HotkeyInfo": {"Hotkey": combo, "Win": win},
                 "TaskSettings": _task_settings(job, description),
             }
-            for combo, job, description in HOTKEYS
-        ],
+        )
+    return {
+        "Hotkeys": entries,
         "ApplicationVersion": "21.0.0",
     }

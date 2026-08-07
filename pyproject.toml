@@ -5,6 +5,9 @@ description = "Sync ShareX recording settings, hotkeys, and microphone selection
 requires-python = ">=3.10"
 dependencies = []
 
+[dependency-groups]
+dev = ["pytest>=8"]
+
 [project.scripts]
 sharex-sync = "sharex_sync.cli:main"
 

@@ -125,7 +125,7 @@ def stop_sharex(timeout: float = _STOP_TIMEOUT_S) -> bool:
 
 
 def start_sharex() -> bool:
-    """Launch ShareX silently. Returns True on success."""
+    """Launch ShareX silently. Returns True if the process was spawned."""
     exe = find_sharex_exe()
     if exe is None:
         return False
@@ -134,3 +134,20 @@ def start_sharex() -> bool:
         return True
     except OSError:
         return False
+
+
+def ensure_sharex_running(wait_s: float = 5.0) -> bool:
+    """Start ShareX if it is not running; wait until it appears (or timeout).
+
+    Returns True if ShareX is confirmed running. Hotkeys only work while it runs.
+    """
+    if is_sharex_running():
+        return True
+    if not start_sharex():
+        return False
+    deadline = time.monotonic() + wait_s
+    while time.monotonic() < deadline:
+        if is_sharex_running():
+            return True
+        time.sleep(0.25)
+    return is_sharex_running()
