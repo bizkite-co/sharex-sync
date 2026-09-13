@@ -4,7 +4,8 @@ Keep ShareX recording settings, hotkeys, and the microphone in sync across the
 team. Run one command on a new machine and it's configured to record the same
 way everyone else does - no hunting through ShareX menus.
 
-Zero runtime dependencies; works with any Python >= 3.10.
+One runtime dependency ([Rich](https://github.com/Textualize/rich), for
+terminal output); works with any Python >= 3.10.
 
 ## Install
 
@@ -32,14 +33,20 @@ Read-only readiness report for this machine. Exit code 0 = ready to record,
 1 = something needs attention.
 
 ```
-OK  config-dir         C:\Users\you\Documents\ShareX
-OK  application-config ...
-OK  hotkeys-config     ...
-OK  sharex-installed   ...
-OK  ffmpeg             ...
-OK  sharex-running     running (leave running)
-!! mic                no AudioSource configured (recordings will be silent) - run `sharex-sync mic`
+  Config files
+OK  config-dir          C:\Users\you\Documents\ShareX
+OK  application-config  ...
+OK  hotkeys-config      ...
+  Runtime
+OK  sharex-installed    ...
+OK  ffmpeg              ...
+OK  sharex-running      running (leave running)
+  Audio
+!!  mic                 no AudioSource configured (recordings will be silent) - run `sharex-sync mic`
 ```
+
+Rendered via Rich as a borderless table - group names get a subtle background
+band instead of a ruled line, matching our other tools' house style.
 
 Good first thing to run on a new machine or when something "stopped working".
 
@@ -94,8 +101,10 @@ never drifts from what's actually applied:
 ```
 $ sharex-sync keys
 Action                              Keycaps                    Windows chord
+  Capture
 Capture region                      Control+PrintScreen        Ctrl+PrintScreen
-Capture active window               Control+Option+W           Ctrl+Win+W
+Capture active window                Control+Option+W          Ctrl+Win+W
+  Recording
 Start/Stop screen recording         Shift+PrintScreen          Shift+PrintScreen
 Start/Stop screen recording (GIF)   Control+Shift+PrintScreen  Ctrl+Shift+PrintScreen
 Record active window                Control+Option+R           Ctrl+Win+R
@@ -160,6 +169,15 @@ ShareX writes its configs on exit. If you edit the files while it's running,
 ShareX will overwrite your edits when it closes. The sync commands stop ShareX
 (`-ExitShareX`), write the files, then restart it (`-silent`) so the changes
 stick. `--silent` skips the stop/start if you're managing ShareX yourself.
+
+## Terminal output
+
+All CLI output goes through **`ui.py`**, which wraps [Rich](https://github.com/Textualize/rich)
+in our shared house style: borderless tables (no box-drawn lines) with a
+subtle background band on each group's header row instead of a rule. The
+top-level help, `status`, and `keys` all use it. Reuse `ui.py`'s `console`
+and group-table pattern rather than introducing a different look in a new
+subcommand.
 
 ## What is tracked, and where to change it
 

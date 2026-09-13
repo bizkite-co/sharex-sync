@@ -100,9 +100,3 @@ def run_report(personal_path: Path | None = None, ffmpeg_path: Path | None = Non
         )
 
     return report
-
-
-def print_report(report: Report) -> None:
-    for check in report.checks:
-        mark = "OK " if check.ok else "!! "
-        print(f"{mark} {check.name:<18} {check.detail}")

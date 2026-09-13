@@ -3,7 +3,9 @@ name = "sharex-sync"
 version = "0.1.0"
 description = "Sync ShareX recording settings, hotkeys, and microphone selection across machines"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = [
+    "rich>=15.0.0",
+]
 
 [dependency-groups]
 dev = ["pytest>=8"]

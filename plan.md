@@ -21,7 +21,8 @@ v1 (config sync + mic + health) is **done** and smoke-tested:
 
 ## Design principles
 
-- Stdlib-only; zero runtime dependencies for `uv tool install`.
+- One runtime dependency: Rich, for terminal output (house style: borderless
+  tables, subtle background bands for grouping, shared with our other tools).
 - Only machine-independent settings are tracked in `defaults.py`.
   AudioSource is resolved per machine (device names differ between people).
 - Write path: stop ShareX -> edit JSON -> start ShareX, so its save-on-exit

@@ -20,15 +20,27 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import config, cut, defaults, ffmpeg, health, logutil, mic, paths, recctl
+from . import config, cut, defaults, ffmpeg, health, logutil, mic, paths, recctl, ui
 
 _EXIT_OK = 0
 _EXIT_CHANGED = 0
 _EXIT_ISSUES = 1
 
 
+class _RichHelpAction(argparse.Action):
+    """-h/--help via ui.print_help instead of argparse's plain-text default."""
+
+    def __init__(self, option_strings, dest=argparse.SUPPRESS, default=argparse.SUPPRESS, help=None):
+        super().__init__(option_strings=option_strings, dest=dest, default=default, nargs=0, help=help)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        ui.print_help(parser)
+        parser.exit()
+
+
 def _common_parser(prog: str) -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog=prog, description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(prog=prog, description=__doc__.splitlines()[0], add_help=False)
+    parser.add_argument("-h", "--help", action=_RichHelpAction, help="show this help message and exit")
     parser.add_argument("--config-dir", help="override ShareX personal config folder")
     parser.add_argument("--ffmpeg", help="path to ffmpeg.exe (default: ShareX bundled)")
     parser.add_argument("--verbose", action="store_true", help="debug logging")
@@ -41,12 +53,12 @@ def _sub_parser(subs: argparse._SubParsersAction, name: str, help_text: str) -> 
 
 def cmd_status(args: argparse.Namespace) -> int:
     report = health.run_report(args.config_dir, args.ffmpeg)
-    health.print_report(report)
+    ui.print_status(report)
     # Auto-start ShareX when health is otherwise fine but the app is down
     if not config.is_sharex_running():
         _ensure_sharex()
         report = health.run_report(args.config_dir, args.ffmpeg)
-        health.print_report(report)
+        ui.print_status(report)
     return _EXIT_OK if report.all_ok else _EXIT_ISSUES
 
 
@@ -172,12 +184,7 @@ def cmd_hotkeys(args: argparse.Namespace) -> int:
 
 
 def cmd_keys(args: argparse.Namespace) -> int:
-    displays = defaults.hotkey_displays()
-    action_w = max(len(d["description"]) for d in displays)
-    keycap_w = max(len(d["keycap"]) for d in displays)
-    print(f"{'Action':<{action_w}}  {'Keycaps':<{keycap_w}}  Windows chord")
-    for d in displays:
-        print(f"{d['description']:<{action_w}}  {d['keycap']:<{keycap_w}}  {d['windows_chord']}")
+    ui.print_keys(defaults.hotkey_displays())
     return _EXIT_OK
 
 
@@ -342,7 +349,7 @@ def main(argv: list[str] | None = None) -> int:
     args = common.parse_args(argv)
 
     if args.command is None:
-        common.print_help()
+        ui.print_help(common)
         return _EXIT_OK
 
     logutil.setup_logging(verbose=args.verbose)
