@@ -5,11 +5,13 @@ from __future__ import annotations
 import pytest
 
 from sharex_sync.recctl import (
+    _PANEL_BUTTONS,
     _key_name_to_vk,
     _format_elapsed,
     combo_for_job,
     combo_to_vk,
     ffmpeg_is_running,
+    press_hotkey,
 )
 
 
@@ -23,6 +25,27 @@ class TestComboForJob:
 
     def test_unknown_job(self):
         assert combo_for_job("NoSuchJob") is None
+
+    def test_record(self):
+        # Control+Option+R on Keychron (Ctrl+Win+R)
+        assert combo_for_job("ScreenRecorderActiveWindow") == ("R", "Control", "Win")
+
+    def test_abort(self):
+        assert combo_for_job("AbortScreenRecording") == ("A", "Control", "Win")
+
+
+class TestPanelButtons:
+    def test_every_button_job_has_a_registered_combo(self):
+        for _label, job, _while_recording in _PANEL_BUTTONS:
+            assert combo_for_job(job) is not None, f"no tracked hotkey for {job!r}"
+
+    def test_record_disabled_while_recording_others_enabled(self):
+        # Record should be clickable only when idle; Pause/Stop/Abort only while recording.
+        by_job = {job: while_recording for _label, job, while_recording in _PANEL_BUTTONS}
+        assert by_job["ScreenRecorderActiveWindow"] is False
+        assert by_job["PauseScreenRecording"] is True
+        assert by_job["StopScreenRecording"] is True
+        assert by_job["AbortScreenRecording"] is True
 
 
 class TestKeyNameToVk:
@@ -84,6 +107,27 @@ class TestFfmpegIsRunning:
 
         monkeypatch.setattr("sharex_sync.recctl.subprocess.run", boom)
         assert ffmpeg_is_running() is False
+
+
+class TestPressHotkey:
+    def test_modifiers_pressed_before_main_key_and_released_first(self, monkeypatch):
+        # combo_for_job returns the main key first (e.g. ("X", "Control", "Win"));
+        # Windows only fires WM_HOTKEY when the main key goes down while
+        # modifiers are already held, so press_hotkey must reorder them.
+        calls = []
+        monkeypatch.setattr("sharex_sync.recctl.os.name", "nt")
+        monkeypatch.setattr(
+            "sharex_sync.recctl._send_key",
+            lambda vk, up: calls.append((vk, up)),
+        )
+
+        press_hotkey(("X", "Control", "Win"))
+
+        vk_x, vk_control, vk_win = 0x58, 0x11, 0x5B
+        downs = [vk for vk, up in calls if not up]
+        ups = [vk for vk, up in calls if up]
+        assert downs == [vk_control, vk_win, vk_x]
+        assert ups == [vk_x, vk_win, vk_control]
 
 
 class TestFormatElapsed:

@@ -7,7 +7,7 @@ can adopt a single working configuration. Installed via `uv tool install`.
 
 v1 (config sync + mic + health) is **done** and smoke-tested:
 
-- `sharex-sync health`   - machine readiness report (configs, ffmpeg, mic)
+- `sharex-sync status`   - machine readiness report (configs, ffmpeg, mic)
 - `sharex-sync mic`      - auto-select recording device (PD100U preferred)
 - `sharex-sync config`   - apply tracked capture settings (with backup)
 - `sharex-sync hotkeys`  - apply tracked hotkeys (with backup)

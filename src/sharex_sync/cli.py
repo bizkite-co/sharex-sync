@@ -1,10 +1,15 @@
 """Command-line interface for sharex-sync.
 
+Installed as both `sharex-sync` and `sharex` (ShareX itself has no CLI, so the
+short name is free). Bare invocation with no subcommand prints this help.
+
 Subcommands:
-  health   - report machine readiness
+  status   - report machine readiness
   mic      - (re)select the recording microphone
   config   - apply tracked settings to ApplicationConfig.json
   hotkeys  - apply tracked hotkeys to HotkeysConfig.json
+  recctl   - always-on-top recording control panel
+  keys     - print the tracked hotkey cheat sheet
   cut      - detect silences and generate editor cut points
 """
 
@@ -34,7 +39,7 @@ def _sub_parser(subs: argparse._SubParsersAction, name: str, help_text: str) -> 
     return subs.add_parser(name, help=help_text)
 
 
-def cmd_health(args: argparse.Namespace) -> int:
+def cmd_status(args: argparse.Namespace) -> int:
     report = health.run_report(args.config_dir, args.ffmpeg)
     health.print_report(report)
     # Auto-start ShareX when health is otherwise fine but the app is down
@@ -88,8 +93,9 @@ def cmd_recctl(args: argparse.Namespace) -> int:
     code = recctl.run_control(paths.discover_personal_path(args.config_dir))
     if code != 0:
         print(
-            "recctl: requires tkinter and the StopScreenRecording/PauseScreenRecording hotkeys "
-            "(run `sharex-sync hotkeys --apply` first)",
+            "recctl: requires tkinter and the tracked recording hotkeys "
+            "(ScreenRecorderActiveWindow/Pause/Stop/AbortScreenRecording) - "
+            "run `sharex-sync hotkeys --apply` first",
             file=sys.stderr,
         )
     return code
@@ -162,6 +168,16 @@ def cmd_hotkeys(args: argparse.Namespace) -> int:
     if not args.silent:
         config.start_sharex()
         print("ShareX restarted")
+    return _EXIT_OK
+
+
+def cmd_keys(args: argparse.Namespace) -> int:
+    displays = defaults.hotkey_displays()
+    action_w = max(len(d["description"]) for d in displays)
+    keycap_w = max(len(d["keycap"]) for d in displays)
+    print(f"{'Action':<{action_w}}  {'Keycaps':<{keycap_w}}  Windows chord")
+    for d in displays:
+        print(f"{d['description']:<{action_w}}  {d['keycap']:<{keycap_w}}  {d['windows_chord']}")
     return _EXIT_OK
 
 
@@ -281,10 +297,11 @@ def _add_runtime_flags(parser: argparse.ArgumentParser) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    common = _common_parser("sharex-sync")
-    subs = common.add_subparsers(dest="command", required=True)
+    prog = Path(sys.argv[0]).stem if sys.argv else "sharex-sync"
+    common = _common_parser(prog)
+    subs = common.add_subparsers(dest="command")
 
-    p_health = _sub_parser(subs, "health", "check this machine is ready to record")
+    p_status = _sub_parser(subs, "status", "check this machine is ready to record")
 
     p_start = _sub_parser(subs, "start", "start ShareX if it is not already running")
 
@@ -294,8 +311,10 @@ def main(argv: list[str] | None = None) -> int:
     _add_runtime_flags(p_mic)
 
     p_recctl = _sub_parser(
-        subs, "recctl", "always-on-top recording control (mic, REC state, Stop/Pause)"
+        subs, "recctl", "always-on-top recording control (mic, REC state, Record/Pause/Stop/Abort)"
     )
+
+    p_keys = _sub_parser(subs, "keys", "print the tracked hotkey cheat sheet")
 
     p_config = _sub_parser(subs, "config", "apply tracked capture settings")
     _add_runtime_flags(p_config)
@@ -321,13 +340,19 @@ def main(argv: list[str] | None = None) -> int:
     p_cut.add_argument("--dry-run", action="store_true", help="print the cut plan without writing")
 
     args = common.parse_args(argv)
+
+    if args.command is None:
+        common.print_help()
+        return _EXIT_OK
+
     logutil.setup_logging(verbose=args.verbose)
 
     handlers = {
-        "health": cmd_health,
+        "status": cmd_status,
         "start": cmd_start,
         "mic": cmd_mic,
         "recctl": cmd_recctl,
+        "keys": cmd_keys,
         "config": cmd_config,
         "hotkeys": cmd_hotkeys,
         "cut": cmd_cut,

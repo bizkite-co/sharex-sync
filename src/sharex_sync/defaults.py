@@ -134,6 +134,58 @@ def _task_settings(job: str, description: str) -> dict:
     }
 
 
+def _modifier_labels(modifiers: list[str], win: bool) -> tuple[list[str], list[str]]:
+    """Split a combo's modifiers into (keycap labels, Windows-chord labels).
+
+    Keycap labels use THIS machine's Keychron Windows-mode legends (see the
+    HOTKEYS comment above): Left Option -> Win, Command -> Alt, Control -> Ctrl.
+    """
+    keycap, windows = [], []
+    if "Control" in modifiers:
+        keycap.append("Control")
+        windows.append("Ctrl")
+    if "Shift" in modifiers:
+        keycap.append("Shift")
+        windows.append("Shift")
+    if "Alt" in modifiers:
+        keycap.append("Command")
+        windows.append("Alt")
+    if win:
+        keycap.append("Option")
+        windows.append("Win")
+    return keycap, windows
+
+
+def hotkey_displays() -> list[dict]:
+    """Human-readable keycap + Windows-chord label for every tracked hotkey.
+
+    Each item: {"job", "description", "keycap", "windows_chord"}.
+    """
+    displays = []
+    for entry in HOTKEYS:
+        combo, job, description, win = _hotkey_parts(entry)
+        parts = [p.strip() for p in combo.split(",")]
+        main_key, modifiers = parts[0], parts[1:]
+        keycap_mods, windows_mods = _modifier_labels(modifiers, win)
+        displays.append(
+            {
+                "job": job,
+                "description": description,
+                "keycap": "+".join(keycap_mods + [main_key]),
+                "windows_chord": "+".join(windows_mods + [main_key]),
+            }
+        )
+    return displays
+
+
+def keycap_for_job(job: str) -> str | None:
+    """Keycap chord (Keychron legends) for a tracked ShareX job, if any."""
+    for display in hotkey_displays():
+        if display["job"] == job:
+            return display["keycap"]
+    return None
+
+
 def hotkeys_config() -> dict:
     """Build the full HotkeysConfig.json document."""
     entries = []

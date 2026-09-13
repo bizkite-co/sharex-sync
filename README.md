@@ -13,8 +13,10 @@ uv tool install .          # from a checkout of this repo
 uv tool install sharex-sync   # once published to PyPI
 ```
 
-The executable is `sharex-sync`. A machine that has ShareX installed (with its
-bundled `ffmpeg.exe`) is ready to go - nothing else needs to be set up.
+The executable is `sharex-sync`, also installed under the short alias `sharex`
+- ShareX itself ships no CLI, so the name is free. Both run the exact same
+commands; `sharex` is just less to type. A machine that has ShareX installed
+(with its bundled `ffmpeg.exe`) is ready to go - nothing else needs to be set up.
 
 ## Commands
 
@@ -22,7 +24,9 @@ Run any command with `--help` for full options. All commands read ShareX's
 config location automatically (registry, then `PersonalPath.cfg`, then
 `MyDocuments\ShareX`); pass `--config-dir` to point at a specific folder.
 
-### `sharex-sync health`
+Bare `sharex` (no subcommand) prints this help.
+
+### `sharex-sync status`
 
 Read-only readiness report for this machine. Exit code 0 = ready to record,
 1 = something needs attention.
@@ -55,14 +59,20 @@ run in a login script or scheduled task.
 
 ### `sharex-sync recctl`
 
-An always-on-top recording control for when ShareX's own Stop/Pause toolbar
-fails to render (Avalonia rewrite, multi-monitor setups). It appears while a
-recording is active and shows:
+An always-on-top recording control panel - for when ShareX's own Stop/Pause
+toolbar fails to render (Avalonia rewrite, multi-monitor setups), and for when
+the hotkeys themselves are hard to remember. It stays visible whether idle or
+recording, and shows:
 
 - which microphone is in use (from `ApplicationConfig.json`)
-- a red `REC` indicator with elapsed time
-- **Pause** and **Stop** buttons that trigger the tracked ShareX hotkeys
-  (`PauseScreenRecording`, `StopScreenRecording`)
+- a red `REC` indicator with elapsed time (or `IDLE`)
+- **Record**, **Pause**, **Stop**, and **Abort** buttons, each labeled with its
+  tracked keycap combo, that trigger the corresponding ShareX hotkeys
+  (`ScreenRecorderActiveWindow`, `PauseScreenRecording`, `StopScreenRecording`,
+  `AbortScreenRecording`) - so it doubles as a cheat sheet even if you never
+  click it. Only the buttons valid for the current state are enabled (e.g.
+  Pause/Stop/Abort are disabled while idle, matching the "don't press pause
+  with nothing recording" gotcha below).
 
 It detects recording by watching for ShareX's `ffmpeg.exe` worker process, so no
 ShareX integration is needed. Requires the recording hotkeys to be registered:
@@ -72,7 +82,27 @@ sharex-sync hotkeys --apply
 sharex-sync recctl
 ```
 
-Close it with the **✕** button; it hides itself when not recording.
+Close it with the **✕** button. Leave it running (e.g. add a shortcut to your
+Startup folder) if you want it available at all times.
+
+### `sharex-sync keys`
+
+Prints the tracked hotkey cheat sheet - keycap combo (this machine's Keychron
+legends) and the underlying Windows chord - straight from `defaults.py`, so it
+never drifts from what's actually applied:
+
+```
+$ sharex-sync keys
+Action                              Keycaps                    Windows chord
+Capture region                      Control+PrintScreen        Ctrl+PrintScreen
+Capture active window               Control+Option+W           Ctrl+Win+W
+Start/Stop screen recording         Shift+PrintScreen          Shift+PrintScreen
+Start/Stop screen recording (GIF)   Control+Shift+PrintScreen  Ctrl+Shift+PrintScreen
+Record active window                Control+Option+R           Ctrl+Win+R
+Pause/Resume screen recording       Control+Option+B           Ctrl+Win+B
+Stop screen recording               Control+Option+X           Ctrl+Win+X
+Abort screen recording              Control+Option+A           Ctrl+Win+A
+```
 
 ### `sharex-sync config`
 
@@ -165,7 +195,7 @@ release).
 
 - ShareX has **no "system default" audio device**. If the saved device name
   doesn't match a device on the machine, it falls back to none and recordings
-  are silent. `sharex-sync health` reports this, and `sharex-sync mic` fixes it.
+  are silent. `sharex-sync status` reports this, and `sharex-sync mic` fixes it.
 - Use the **friendly device name** (e.g. `Microphone (PD100U)`). The raw
   `@device_cm_...\wave_...` form gets double-escaped by ShareX and fails.
 - A missing device never crashes ShareX - it just records without audio. So
@@ -210,7 +240,7 @@ The package writes a daily-rotating log (7 days retained by default) to
 
 ```powershell
 uv sync                # create .venv
-uv run sharex-sync health
+uv run sharex-sync status
 ```
 
 ## Roadmap

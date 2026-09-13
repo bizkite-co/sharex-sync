@@ -1,10 +1,12 @@
 """Always-on-top recording control for ShareX.
 
 ShareX's built-in recording toolbar (Stop/Pause/Abort buttons) can fail to
-render on some setups (Avalonia rewrite, multi-monitor, DPI quirks). This module
-provides a minimal replacement: a small always-on-top strip that appears while a
-recording is active, shows which microphone is in use and the elapsed time, and
-offers Pause and Stop buttons that trigger the tracked ShareX hotkeys.
+render on some setups (Avalonia rewrite, multi-monitor, DPI quirks), and the
+recording hotkeys are easy to forget. This module provides a minimal
+replacement: a small always-on-top panel, visible whether idle or recording,
+with a Record/Pause/Stop/Abort button per tracked hotkey - each labeled with
+its keycap combo, so the panel doubles as a cheat sheet even when you don't
+click it. It also shows which microphone is in use and the elapsed time.
 
 Windows-only (relies on ``tasklist`` and ``SendInput``).
 """
@@ -134,11 +136,22 @@ def _send_key(vk: int, up: bool) -> None:
     )
 
 
+_MODIFIER_NAMES = {"CONTROL", "ALT", "SHIFT", "WIN"}
+
+
 def press_hotkey(combo: tuple[str, ...]) -> bool:
-    """Synthesize a hotkey press via SendInput. Returns False on non-Windows."""
+    """Synthesize a hotkey press via SendInput. Returns False on non-Windows.
+
+    Windows only fires a registered hotkey's WM_HOTKEY when the non-modifier
+    key goes down while the modifiers are already held, so modifiers must be
+    pressed first and released last (main key released first).
+    """
     if os.name != "nt":
         return False
-    codes = combo_to_vk(combo)
+    modifiers = [part for part in combo if part.strip().upper() in _MODIFIER_NAMES]
+    main_keys = [part for part in combo if part.strip().upper() not in _MODIFIER_NAMES]
+    ordered = modifiers + main_keys
+    codes = combo_to_vk(tuple(ordered))
     for vk in codes:
         _send_key(vk, up=False)
     for vk in reversed(codes):
@@ -177,17 +190,25 @@ def _format_elapsed(seconds: float) -> str:
     return f"{seconds // 3600:02d}:{seconds % 3600 // 60:02d}:{seconds % 60:02d}"
 
 
+# Panel buttons, in display order: (label, ShareX job, enabled while recording?)
+_PANEL_BUTTONS = [
+    ("\u23fa Record", "ScreenRecorderActiveWindow", False),
+    ("\u23f8 Pause", "PauseScreenRecording", True),
+    ("\u23f9 Stop", "StopScreenRecording", True),
+    ("\u2716 Abort", "AbortScreenRecording", True),
+]
+
+
 def run_control(personal_path: Path | None = None) -> int:
-    """Launch the always-on-top recording control. Returns a process exit code."""
+    """Launch the always-on-top ShareX control panel. Returns a process exit code."""
     if tk is None:
         return 1
 
     if personal_path is None:
         personal_path = paths.discover_personal_path()
 
-    stop_combo = combo_for_job("StopScreenRecording")
-    pause_combo = combo_for_job("PauseScreenRecording")
-    if stop_combo is None or pause_combo is None:
+    combos = {job: combo_for_job(job) for _label, job, _while_recording in _PANEL_BUTTONS}
+    if any(combo is None for combo in combos.values()):
         return 2
 
     root = tk.Tk()
@@ -200,20 +221,35 @@ def run_control(personal_path: Path | None = None) -> int:
     frame = tk.Frame(root, bd=1, relief="solid", padx=8, pady=4)
     frame.pack(fill="both", expand=True)
 
-    status = tk.Label(frame, text="\u25cf IDLE", fg="#666", font=("Segoe UI", 11, "bold"))
+    top = tk.Frame(frame)
+    top.pack(fill="x")
+
+    status = tk.Label(top, text="\u25cf IDLE", fg="#666", font=("Segoe UI", 11, "bold"))
     status.pack(side="left", padx=(0, 8))
 
-    mic = tk.Label(frame, text="Mic: -", font=("Segoe UI", 10))
+    mic = tk.Label(top, text="Mic: -", font=("Segoe UI", 10))
     mic.pack(side="left", padx=(0, 8))
 
-    pause_btn = tk.Button(frame, text="\u23f8 Pause", width=8, state="disabled")
-    stop_btn = tk.Button(frame, text="\u23f9 Stop", width=8, bg="#c0392b", fg="white",
-                         activebackground="#a93226", activeforeground="white")
-    pause_btn.pack(side="left", padx=2)
-    stop_btn.pack(side="left", padx=2)
+    close_btn = tk.Button(top, text="\u2715", width=2, relief="flat", command=root.destroy)
+    close_btn.pack(side="right")
 
-    close_btn = tk.Button(frame, text="\u2715", width=2, relief="flat", command=root.destroy)
-    close_btn.pack(side="left", padx=(6, 0))
+    button_row = tk.Frame(frame)
+    button_row.pack(fill="x", pady=(4, 0))
+
+    buttons: dict[str, tk.Button] = {}
+    for label, job, while_recording in _PANEL_BUTTONS:
+        keycap = defaults.keycap_for_job(job)
+        text = f"{label}\n{keycap}" if keycap else label
+        style = (
+            {"bg": "#c0392b", "fg": "white", "activebackground": "#a93226", "activeforeground": "white"}
+            if job == "StopScreenRecording"
+            else {}
+        )
+        initial_state = "disabled" if while_recording else "normal"  # matches state["recording"] = False below
+        btn = tk.Button(button_row, text=text, width=11, font=("Segoe UI", 8), justify="center",
+                        state=initial_state, **style)
+        btn.pack(side="left", padx=2)
+        buttons[job] = btn
 
     def _place() -> None:
         root.update_idletasks()
@@ -222,16 +258,15 @@ def run_control(personal_path: Path | None = None) -> int:
 
     state = {"recording": False, "since": 0.0, "mic": ""}
 
-    def _stop() -> None:
-        press_hotkey(stop_combo)
-        _poll()
+    def _trigger(job: str):
+        def _handler() -> None:
+            press_hotkey(combos[job])
+            _poll()
 
-    def _pause() -> None:
-        press_hotkey(pause_combo)
-        _poll()
+        return _handler
 
-    pause_btn.configure(command=_pause)
-    stop_btn.configure(command=_stop)
+    for _label, job, _while_recording in _PANEL_BUTTONS:
+        buttons[job].configure(command=_trigger(job))
 
     def _poll() -> None:
         recording = ffmpeg_is_running()
@@ -248,17 +283,15 @@ def run_control(personal_path: Path | None = None) -> int:
 
         if recording:
             status.configure(text=f"\u25cf REC {_format_elapsed(now - state['since'])}", fg="#c0392b")
-            pause_btn.configure(state="normal")
-            root.deiconify()
         else:
             status.configure(text="\u25cf IDLE", fg="#666")
-            pause_btn.configure(state="disabled")
-            root.withdraw()
+
+        for _label, job, while_recording in _PANEL_BUTTONS:
+            buttons[job].configure(state="normal" if recording == while_recording else "disabled")
 
         root.after(_POLL_MS, _poll)
 
     _place()
-    root.withdraw()
     root.after(_POLL_MS, _poll)
     root.mainloop()
     return 0
