@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 from rich.theme import Theme
 
@@ -67,8 +68,8 @@ def print_help(parser: argparse.ArgumentParser) -> None:
     prog = parser.prog
     help_by_name = _subcommand_help(parser)
 
-    console.print(f"[bold]{prog}[/bold] [muted]- keep ShareX settings, hotkeys, and the mic in sync[/muted]")
-    console.print(f"[muted]Usage: {prog} [--config-dir DIR] [--ffmpeg PATH] [--verbose] <command> ...[/muted]\n")
+    console.print(f"[bold]{escape(prog)}[/bold] [muted]- keep ShareX settings, hotkeys, and the mic in sync[/muted]")
+    console.print(f"[muted]Usage: {escape(prog)} [--config-dir DIR] [--ffmpeg PATH] [--verbose] <command> ...[/muted]\n")
 
     table = Table(box=None, show_header=False, padding=(0, 1, 0, 1))
     table.add_column(style="cmd", no_wrap=True, min_width=12)
@@ -80,13 +81,46 @@ def print_help(parser: argparse.ArgumentParser) -> None:
         for name in names:
             if name in help_by_name:
                 seen.add(name)
-                table.add_row(f"  {name}", help_by_name[name])
+                table.add_row(f"  {name}", escape(help_by_name[name]))
     for name, help_text in help_by_name.items():
         if name not in seen:
-            table.add_row(f"  {name}", help_text)
+            table.add_row(f"  {name}", escape(help_text))
 
     console.print(table)
     console.print("\n[muted]Run any command with --help for full options.[/muted]")
+
+
+def print_subcommand_help(parser: argparse.ArgumentParser) -> None:
+    """Render one subcommand's --help in the same borderless, grouped style."""
+    positionals = [a for a in parser._actions if not a.option_strings]
+    options = [a for a in parser._actions if a.option_strings]
+
+    usage = f"{parser.prog} <options>"
+    if positionals:
+        usage += " " + " ".join(a.dest for a in positionals)
+
+    if parser.description:
+        console.print(f"[bold]{escape(parser.prog)}[/bold] [muted]- {escape(parser.description)}[/muted]")
+    console.print(f"[muted]Usage: {escape(usage)}[/muted]\n")
+
+    table = Table(box=None, show_header=False, padding=(0, 1, 0, 1))
+    table.add_column(style="cmd", no_wrap=True, min_width=12)
+    table.add_column(overflow="fold")
+
+    formatter = argparse.HelpFormatter(prog=parser.prog)
+
+    if positionals:
+        table.add_row(" Positional arguments ", "", style="group")
+        for action in positionals:
+            table.add_row(f"  {action.dest}", escape(action.help or ""))
+
+    if options:
+        table.add_row(" Options ", "", style="group")
+        for action in options:
+            invocation = formatter._format_action_invocation(action)
+            table.add_row(f"  {escape(invocation)}", escape(action.help or ""))
+
+    console.print(table)
 
 
 def print_status(report) -> None:
@@ -106,11 +140,11 @@ def print_status(report) -> None:
                 continue
             seen.add(name)
             mark = "[ok]OK[/]" if check.ok else "[bad]!![/]"
-            table.add_row(mark, check.name, check.detail)
+            table.add_row(mark, escape(check.name), escape(check.detail))
     for check in report.checks:
         if check.name not in seen:
             mark = "[ok]OK[/]" if check.ok else "[bad]!![/]"
-            table.add_row(mark, check.name, check.detail)
+            table.add_row(mark, escape(check.name), escape(check.detail))
 
     console.print(table)
 
@@ -131,9 +165,9 @@ def print_keys(displays: list[dict]) -> None:
             if d is None:
                 continue
             seen.add(job)
-            table.add_row(d["description"], d["keycap"], d["windows_chord"])
+            table.add_row(escape(d["description"]), escape(d["keycap"]), escape(d["windows_chord"]))
     for d in displays:
         if d["job"] not in seen:
-            table.add_row(d["description"], d["keycap"], d["windows_chord"])
+            table.add_row(escape(d["description"]), escape(d["keycap"]), escape(d["windows_chord"]))
 
     console.print(table)

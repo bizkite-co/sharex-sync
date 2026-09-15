@@ -28,13 +28,21 @@ _EXIT_ISSUES = 1
 
 
 class _RichHelpAction(argparse.Action):
-    """-h/--help via ui.print_help instead of argparse's plain-text default."""
+    """-h/--help via ui.py instead of argparse's plain-text default.
+
+    Applied uniformly to the top-level parser and every subparser, so all
+    help output shares one borderless, grouped house style.
+    """
 
     def __init__(self, option_strings, dest=argparse.SUPPRESS, default=argparse.SUPPRESS, help=None):
         super().__init__(option_strings=option_strings, dest=dest, default=default, nargs=0, help=help)
 
     def __call__(self, parser, namespace, values, option_string=None):
-        ui.print_help(parser)
+        has_subcommands = any(isinstance(a, argparse._SubParsersAction) for a in parser._actions)
+        if has_subcommands:
+            ui.print_help(parser)
+        else:
+            ui.print_subcommand_help(parser)
         parser.exit()
 
 
@@ -48,7 +56,9 @@ def _common_parser(prog: str) -> argparse.ArgumentParser:
 
 
 def _sub_parser(subs: argparse._SubParsersAction, name: str, help_text: str) -> argparse.ArgumentParser:
-    return subs.add_parser(name, help=help_text)
+    parser = subs.add_parser(name, help=help_text, description=help_text, add_help=False)
+    parser.add_argument("-h", "--help", action=_RichHelpAction, help="show this help message and exit")
+    return parser
 
 
 def cmd_status(args: argparse.Namespace) -> int:
