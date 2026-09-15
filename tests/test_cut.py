@@ -8,12 +8,14 @@ import xml.etree.ElementTree as ET
 import pytest
 
 from sharex_sync.cut import (
+    CutError,
     Segment,
     VideoInfo,
     find_app,
     generate_llc,
     generate_mlt,
     keep_segments,
+    parse_clock,
     parse_probe_output,
     parse_silence_output,
     to_timecode,
@@ -136,6 +138,26 @@ class TestToTimecode:
 
     def test_ntsc_frame_align(self):
         assert to_timecode(1.0, 30000, 1001) == "00:00:01.001"
+
+
+class TestParseClock:
+    def test_bare_seconds(self):
+        assert parse_clock("624") == 624.0
+        assert parse_clock("90.5") == 90.5
+
+    def test_minutes_seconds(self):
+        assert parse_clock("10:24") == 624.0
+
+    def test_hours_minutes_seconds(self):
+        assert parse_clock("1:02:03") == 3723.0
+
+    def test_invalid_raises(self):
+        with pytest.raises(CutError):
+            parse_clock("not-a-time")
+
+    def test_too_many_parts_raises(self):
+        with pytest.raises(CutError):
+            parse_clock("1:02:03:04")
 
 
 class TestGenerateLlc:

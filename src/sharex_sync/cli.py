@@ -219,9 +219,14 @@ def cmd_cut(args: argparse.Namespace) -> int:
         return _EXIT_ISSUES
 
     try:
-        silences = cut.detect_silence(ffmpeg_path, video, args.threshold_db, args.min_silence)
         info = cut.probe_video(ffmpeg_path, video)
-        segments = cut.keep_segments(info.duration, silences, args.margin)
+        if args.to is not None:
+            # Plain trim from the start - no silence detection, no editor project.
+            silences: list[cut.Segment] = []
+            segments = [cut.Segment(0.0, min(cut.parse_clock(args.to), info.duration))]
+        else:
+            silences = cut.detect_silence(ffmpeg_path, video, args.threshold_db, args.min_silence)
+            segments = cut.keep_segments(info.duration, silences, args.margin)
     except cut.CutError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return _EXIT_ISSUES
@@ -232,7 +237,7 @@ def cmd_cut(args: argparse.Namespace) -> int:
         print("nothing to keep - the whole recording appears to be silence")
         return _EXIT_ISSUES
 
-    targets = _normalize_targets(args.target)
+    targets = ["ffmpeg"] if args.to is not None else _normalize_targets(args.target)
     if args.dry_run:
         print("dry run - no files written (targets: " + ", ".join(targets) + ")")
         return _EXIT_OK
@@ -253,7 +258,8 @@ def cmd_cut(args: argparse.Namespace) -> int:
         written.append(path)
         print(f"wrote Shotcut project: {path}")
     if "ffmpeg" in targets:
-        out_path = Path(args.out) if args.out else (out_dir or video.parent) / f"{video.stem}.cut.mp4"
+        suffix = "trim" if args.to is not None else "cut"
+        out_path = Path(args.out) if args.out else (out_dir or video.parent) / f"{video.stem}.{suffix}.mp4"
         try:
             cut.cut_lossless(ffmpeg_path, video, segments, out_path, reencode=args.reencode)
             written.append(out_path)
@@ -331,6 +337,8 @@ def main(argv: list[str] | None = None) -> int:
 
     p_cut = _sub_parser(subs, "cut", "detect silences and generate editor cut points")
     p_cut.add_argument("video", help="recording to analyze")
+    p_cut.add_argument("--to", help="just trim to this point from the start (HH:MM:SS, MM:SS, or "
+                       "seconds) - a plain lossless cut, skips silence detection and editor projects")
     p_cut.add_argument("--threshold-db", type=float, default=cut.DEFAULT_NOISE_DB,
                        help=f"silence threshold in dB (default: {cut.DEFAULT_NOISE_DB})")
     p_cut.add_argument("--min-silence", type=float, default=cut.DEFAULT_MIN_SILENCE_S,

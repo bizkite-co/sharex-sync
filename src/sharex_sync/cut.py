@@ -239,6 +239,27 @@ def format_clock(seconds: float) -> str:
     return f"{minutes}:{secs:02d}"
 
 
+def parse_clock(text: str) -> float:
+    """Parse a clock string ("10:24", "1:02:03") or bare seconds into float seconds."""
+    text = text.strip()
+    if ":" not in text:
+        try:
+            return float(text)
+        except ValueError:
+            raise CutError(f"invalid timestamp: {text!r}") from None
+    parts = text.split(":")
+    if len(parts) > 3:
+        raise CutError(f"invalid timestamp: {text!r}")
+    try:
+        values = [float(p) for p in parts]
+    except ValueError:
+        raise CutError(f"invalid timestamp: {text!r}") from None
+    seconds = 0.0
+    for value in values:
+        seconds = seconds * 60 + value
+    return seconds
+
+
 def llc_project_path(video: Path, out_dir: Path | None = None) -> Path:
     base = out_dir or video.parent
     return base / (video.stem + _LLC_SUFFIX)
@@ -437,6 +458,8 @@ def cut_lossless(
     if proc.returncode != 0:
         tail = "\n".join((proc.stderr or "").strip().splitlines()[-5:])
         raise CutError(f"ffmpeg concat failed (exit {proc.returncode}): {tail}")
+
+    shutil.rmtree(parts_dir, ignore_errors=True)
     return out_path
 
 
