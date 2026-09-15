@@ -163,6 +163,18 @@ Shotcut/LosslessCut with the generated project.
 LosslessCut is free from GitHub releases; the Microsoft Store charge only buys
 auto-updates and a signed installer.
 
+**Just need to trim the end off one video?** `--to` skips silence detection
+and editor projects entirely - a plain lossless cut from the start:
+
+```
+sharex-sync cut rec.mp4 --to 10:24     # keep only the first 10m24s
+sharex-sync cut rec.mp4 --to 90        # bare seconds also work
+```
+
+Writes `rec.trim.mp4`. This is an end-trim (no seeking to a non-zero start),
+so unlike the `--target ffmpeg` case above it doesn't need keyframe alignment
+and lands within a frame of the point you asked for.
+
 ### Why commands restart ShareX
 
 ShareX writes its configs on exit. If you edit the files while it's running,
